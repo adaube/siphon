@@ -9,13 +9,18 @@ addons:
     paths:
       - $(find $WHEELDIR -newer $WHEELDIR/download_marker -name *.whl | tr [:space:] :)
   apt:
-    packages: &base_build
+    packages:
     - libhdf5-serial-dev
     - libnetcdf-dev
 
 python:
-  - 3.5
+  - 3.6
   - 2.7
+
+cache:
+  - pip
+  - directories:
+    - $HOME/local
 
 env:
   global:
@@ -23,115 +28,112 @@ env:
     - WHEELHOUSE="https://unidata-python.s3.amazonaws.com/wheelhouse/index.html"
     - WHEELDIR="wheelhouse/"
     - EXTRAS="test"
+    - GH_PAGES_DIR="$HOME/gh-pages"
   matrix:
     - TASK="coverage"
-    - TASK="examples"
-    - TASK="lint"
+    - TASK="docs"
 
 matrix:
   include:
-    - python: 2.7
-      env: TASK="docs"
-      addons:
-        apt:
-          packages:
-            - *base_build
-            - pandoc
-    - python: 3.3
-      env:
     - python: 3.4
       env:
-    - python: "3.5-dev"
+    - python: 3.5
+      env:
+    - python: "3.6-dev"
       env: PRE="--pre"
     - python: nightly
       env: PRE="--pre"
   allow_failures:
-    - python: "3.5-dev"
+    - python: "3.6-dev"
     - python: nightly
 
 before_install:
+  # Shapely dependency needed to keep from using Shapely's manylinux wheels
+  # which use a different geos that what we build cartopy with on Travis
   - pip install --upgrade pip;
-  - if [[ $TASK == "lint" ]]; then
-      pip install flake8 pep8-naming;
-    elif [[ $TASK == "docs" ]]; then
-        pip install -r docs/requirements.txt -f $WHEELHOUSE;
-    else
-      export EXTRA_PACKAGES="Cython";
-      if [[ $TASK == "examples" ]]; then
-        export EXTRAS="$EXTRAS,examples";
-        export EXTRA_PACKAGES="$EXTRA_PACKAGES nbconvert ipykernel";
-        wget https://github.com/OSGeo/proj.4/archive/4.9.2.tar.gz;
-        tar xf 4.9.2.tar.gz;
-        pushd proj.4-4.9.2;
+  - pip install --upgrade setuptools;
+  - if [[ $TASK == "docs" ]]; then
+      if ! git describe --tags; then git fetch --depth=150; fi;
+      export EXTRAS="doc,examples,netcdf";
+      export EXTRA_PACKAGES="Cython pillow sphinx_rtd_theme shapely<1.5.17.post1";
+      ls $HOME/local/lib/;
+      if [[ ! -f $HOME/local/lib/libproj.so ]]; then
+        wget http://download.osgeo.org/proj/proj-4.9.3.tar.gz;
+        tar xf proj-4.9.3.tar.gz;
+        pushd proj-4.9.3;
         ./configure --prefix=$HOME/local;
         make;
         sed -i "" -e s/-I// proj.pc;
         make install;
-        export PKG_CONFIG_PATH="$HOME/local/lib/pkgconfig";
-        export LD_LIBRARY_PATH="$HOME/local/lib";
-        pkg-config --modversion proj;
         popd;
-      elif [[ $TASK == "coverage" ]]; then
+      fi;
+      export PKG_CONFIG_PATH="$HOME/local/lib/pkgconfig";
+      export LD_LIBRARY_PATH="$HOME/local/lib";
+      pkg-config --modversion proj;
+    else
+      export TEST_OPTS="--flake8";
+      if [[ $TASK == "coverage" ]]; then
+        export TEST_OPTS="$TEST_OPTS --cov=siphon";
         pip install pytest-cov;
       fi;
-      mkdir $WHEELDIR;
-      pip download -d $WHEELDIR ".[$EXTRAS]" $EXTRA_PACKAGES -f $WHEELHOUSE $PRE $VERSIONS;
-      touch $WHEELDIR/download_marker && ls -lrt $WHEELDIR;
-      travis_wait pip wheel -w $WHEELDIR $EXTRA_PACKAGES -f $WHEELHOUSE $PRE $VERSIONS;
-      pip install $EXTRA_PACKAGES --upgrade --no-index -f file://$PWD/$WHEELDIR $VERSIONS;
-      travis_wait pip wheel ".[$EXTRAS]" -w $WHEELDIR -f $WHEELHOUSE $PRE $VERSIONS;
-      rm -f $WHEELDIR/siphon*.whl;
-    fi
+    fi;
+  - mkdir $WHEELDIR;
+  - pip download -d $WHEELDIR ".[$EXTRAS]" $EXTRA_PACKAGES -f $WHEELHOUSE $PRE $VERSIONS;
+  - touch $WHEELDIR/download_marker && ls -lrt $WHEELDIR;
+  - travis_wait pip wheel -w $WHEELDIR $EXTRA_PACKAGES -f $WHEELHOUSE $PRE $VERSIONS;
+  - pip install $EXTRA_PACKAGES --upgrade --no-index -f file://$PWD/$WHEELDIR $VERSIONS;
+  - travis_wait pip wheel -w $WHEELDIR ".[$EXTRAS]" $EXTRA_PACKAGES -f $WHEELHOUSE $PRE $VERSIONS;
+  - rm -f $WHEELDIR/siphon*.whl;
 
 install:
-  - if [[ $TASK != "lint" && $TASK != "docs" ]]; then
-      pip install ".[$EXTRAS]" --upgrade --no-index -f file://$PWD/$WHEELDIR $VERSIONS;
-      if [[ $TASK == "examples" ]]; then
-        python setup.py examples;
-      fi;
-    fi
+  - pip install ".[$EXTRAS]" --upgrade --no-index $PRE -f file://$PWD/$WHEELDIR $VERSIONS;
 
 script:
-  - if [[ $TASK == "lint" ]]; then
-      flake8 siphon;
-    elif [[ $TASK == "docs" ]]; then
+  - if [[ $TASK == "docs" ]]; then
       pushd docs;
-      make html 2>../docs.log;
+      make clean html linkcheck;
+      export DOC_BUILD_RESULT=$?;
       popd;
-      doc8 README.rst docs/source;
-      if [ -s docs.log -o $? -ne 0 ]; then
-        echo Doc build produced warnings or errors:;
-        cat docs.log;
+      doc8 README.rst docs;
+      if [[ $DOC_BUILD_RESULT -ne 0 || $? -ne 0 ]]; then
         false;
       fi;
-    elif [[ $TASK == "examples" ]]; then
-      if [[ $TRAVIS_PYTHON_VERSION == 2* ]]; then
-        sed -i -e "s/python3/python2/" examples/notebooks/*.ipynb;
-      fi;
-      find examples/notebooks/ -name \*.ipynb -print0 | xargs -0 -n1 jupyter nbconvert --execute --ExecutePreprocessor.timeout=180 --to=notebook --stdout >| /dev/null;
-    elif [[ $TASK == "coverage" ]]; then
-      python setup.py test --addopts --cov=siphon;
     else
-      python setup.py test;
+      flake8 --version;
+      python setup.py test --addopts "-s $TEST_OPTS --no-print-logs";
     fi
 
-after_success:
+after_script:
   - if [[ $TASK == "coverage" ]]; then
       pip install codecov codacy-coverage;
-      codecov;
+      codecov -e TRAVIS_PYTHON_VERSION;
       coverage xml;
       python-codacy-coverage -r coverage.xml;
     fi
 
+before_deploy:
+  - if [[ $TASK == "docs" ]]; then
+      rm -f docs/build/html/_static/jquery-*.js;
+      rm -f docs/build/html/_static/underscore-*.js;
+      rm -f docs/build/html/.buildinfo;
+    fi
+
 deploy:
-  provider: pypi
-  user: dopplershift
-  password:
-    secure: RQNuBqUGZHgE7Ux9ud93i8IHiAtjy8mibkYoCbYrY4yhobnMT6cJED33jWyEyVHdQ0GIeAl1PQ7NVl4K9OG0L/KADfVLxEqEBoTu6m2Za5ywBDJChyD3N1XlZT/ix7jEIImrjyfcNLahhH8JLpFrBtIllO7JsMgUo3RtzHwBysg=
-  distributions: sdist bdist_wheel
-  upload_docs: no
-  on:
-    repo: Unidata/siphon
-    python: 3.5
-    condition: '$TASK == "coverage"'
-    tags: true
+  - provider: pypi
+    user: dopplershift
+    password:
+      secure: RQNuBqUGZHgE7Ux9ud93i8IHiAtjy8mibkYoCbYrY4yhobnMT6cJED33jWyEyVHdQ0GIeAl1PQ7NVl4K9OG0L/KADfVLxEqEBoTu6m2Za5ywBDJChyD3N1XlZT/ix7jEIImrjyfcNLahhH8JLpFrBtIllO7JsMgUo3RtzHwBysg=
+    distributions: sdist bdist_wheel
+    upload_docs: no
+    on:
+      repo: Unidata/siphon
+      python: 3.6
+      condition: '$TASK == "coverage"'
+      tags: true
+  - provider: script
+    script: ci/deploy_docs.sh
+    skip_cleanup: true
+    on:
+      all_branches: true
+      python: 3.6
+      condition: '$TASK == "docs"'

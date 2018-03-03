@@ -1,20 +1,22 @@
-# Copyright (c) 2013-2015 Unidata.
+# Copyright (c) 2014-2016 University Corporation for Atmospheric Research/Unidata.
 # Distributed under the terms of the MIT License.
 # SPDX-License-Identifier: MIT
+"""Test the low-level ncstream interface."""
 
 from io import BytesIO
-from siphon.testing import get_recorder
-from siphon.cdmr.ncstream import read_ncstream_messages, read_var_int
-from siphon.cdmr.ncStream_pb2 import Header
 
 import pytest
+
+from siphon.cdmr.ncstream import read_ncstream_messages, read_var_int
+from siphon.cdmr.ncStream_pb2 import Header
+from siphon.testing import get_recorder
 
 recorder = get_recorder(__file__)
 
 
 @recorder.use_cassette('latest_rap_catalog')
 def get_test_latest_url(query=None):
-    'Get the latest URL for testing'
+    """Get the latest URL for testing."""
     from siphon.catalog import TDSCatalog
     cat = TDSCatalog('http://thredds-test.unidata.ucar.edu/thredds/catalog/'
                      'grib/NCEP/RAP/CONUS_13km/latest.xml')
@@ -26,19 +28,19 @@ def get_test_latest_url(query=None):
 
 @recorder.use_cassette('latest_rap_ncstream_header')
 def get_header_remote():
-    'Get a header from a remote data source'
+    """Get a header from a remote data source."""
     from siphon.http_util import urlopen
     return urlopen(get_test_latest_url('req=header'))
 
 
-@pytest.mark.parametrize("src, result", [(b'\xb6\xe0\x02', 45110), (b'\x17\n\x0b', 23)])
+@pytest.mark.parametrize('src, result', [(b'\xb6\xe0\x02', 45110), (b'\x17\n\x0b', 23)])
 def test_read_var_int(src, result):
-    "Check that we properly read variable length integers   "
+    """Check that we properly read variable length integers."""
     assert read_var_int(BytesIO(src)) == result
 
 
 def test_header_message_def():
-    'Test parsing of Header message'
+    """Test parsing of Header message."""
     f = get_header_remote()
     messages = read_ncstream_messages(f)
     assert len(messages) == 1
@@ -52,7 +54,7 @@ def test_header_message_def():
 
 
 def test_local_data():
-    'Test reading ncstream messages directly from bytes in a file-like object'
+    """Test reading ncstream messages directly from bytes in a file-like object."""
     f = BytesIO(b'\xab\xec\xce\xba\x17\n\x0breftime_ISO\x10\x07\x1a\x04\n'
                 b'\x02\x10\x01(\x02\x01\x142014-10-28T21:00:00Z')
     messages = read_ncstream_messages(f)
@@ -60,28 +62,10 @@ def test_local_data():
     assert messages[0][0] == '2014-10-28T21:00:00Z'
 
 
-def test_bad_magic():
-    'Test that we get notified of bad magic bytes in stream'
-    import logging
-    import sys
-
-    # Only StringIO's version supports writing str
-    if sys.version_info.major == 2:
-        from StringIO import StringIO
-    else:
-        from io import StringIO
-
-    # Set up capturing of logging
-    log = logging.getLogger('siphon.cdmr.ncstream')
-    err_out = StringIO()
-    log.addHandler(logging.StreamHandler(err_out))
-
+def test_bad_magic(caplog):
+    """Test that we get notified of bad magic bytes in stream."""
     # Try reading a bad message
     f = BytesIO(b'\x00\x01\x02\x03')
     read_ncstream_messages(f)
 
-    log.handlers.pop()
-
-    # Make sure we got some error output
-    err_out.seek(0)
-    assert 'Unknown magic' in err_out.read()
+    assert 'Unknown magic' in caplog.text

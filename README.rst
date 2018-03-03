@@ -3,13 +3,12 @@ Siphon
 
 |License| |PRWelcome|
 
-|PyPI| |PyPIDownloads| |Conda| |CondaDownloads|
+|Docs| |PyPI| |Conda|
 
-|Travis| |AppVeyor|
+|Travis| |AppVeyor| |CodeCov|
 
-|CodeCov| |Codacy| |QuantifiedCode|
+|Codacy|
 
-|LatestDocs| |StableDocs|
 
 .. |License| image:: https://img.shields.io/pypi/l/siphon.svg
     :target: https://pypi.python.org/pypi/siphon/
@@ -19,17 +18,9 @@ Siphon
     :target: https://pypi.python.org/pypi/siphon/
     :alt: PyPI Package
 
-.. |PyPIDownloads| image:: https://img.shields.io/pypi/dm/siphon.svg
-    :target: https://pypi.python.org/pypi/siphon/
-    :alt: PyPI Downloads
-
-.. |Conda| image:: https://anaconda.org/unidata/siphon/badges/version.svg
-    :target: https://anaconda.org/unidata/siphon
+.. |Conda| image:: https://anaconda.org/conda-forge/siphon/badges/version.svg
+    :target: https://anaconda.org/conda-forge/siphon
     :alt: Conda Package
-
-.. |CondaDownloads| image:: https://anaconda.org/unidata/siphon/badges/downloads.svg
-    :target: https://anaconda.org/unidata/siphon
-    :alt: Conda Downloads
 
 .. |Travis| image:: https://travis-ci.org/Unidata/siphon.svg?branch=master
     :target: https://travis-ci.org/Unidata/siphon
@@ -43,35 +34,29 @@ Siphon
     :target: https://codecov.io/github/Unidata/siphon?branch=master
     :alt: Code Coverage Status
 
-.. |QuantifiedCode| image:: https://www.quantifiedcode.com/api/v1/project/e4c6ae8ad9d64a8a94f5454ff28615b1/badge.svg
-    :target: https://www.quantifiedcode.com/app/project/e4c6ae8ad9d64a8a94f5454ff28615b1
-    :alt: Code issues
-
 .. |Codacy| image:: https://api.codacy.com/project/badge/grade/ebacd20b84ab4673bd6cd34f65c48af6
     :target: https://www.codacy.com/app/Unidata/siphon
     :alt: Codacy code issues
 
-.. |LatestDocs| image:: https://readthedocs.org/projects/pip/badge/?version=latest
-    :target: http://siphon.readthedocs.org/en/latest/
-    :alt: Latest Doc Build Status
-
-.. |StableDocs| image:: https://readthedocs.org/projects/pip/badge/?version=stable
-    :target: http://siphon.readthedocs.org/en/stable/
-    :alt: Stable Doc Build Status
+.. |Docs| image:: https://img.shields.io/badge/docs-stable-brightgreen.svg
+    :target: http://unidata.github.io/siphon
+    :alt: Latest Docs
 
 .. |PRWelcome| image:: https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=round-square
     :target: https://egghead.io/series/how-to-contribute-to-an-open-source-project-on-github
     :alt: PRs Welcome
 
 Siphon is a collection of Python utilities for downloading data from Unidata
-data technologies.
+data technologies. See our `support page`__ for ways to get help with Siphon.
+
+__ https://github.com/Unidata/siphon/blob/master/SUPPORT.md
 
 Siphon is still in an early stage of development, and as such
 **no APIs are considered stable.** While we won't break things
 just for fun, many things may still change as we work through
 design issues.
 
-We support Python 2.7 as well as Python >= 3.3.
+We support Python 2.7 as well as Python >= 3.4.
 
 Installation
 ------------
@@ -85,8 +70,7 @@ Important Links
 ---------------
 
 - Source code repository: https://github.com/Unidata/siphon
-- HTML Documentation (stable release): http://siphon.readthedocs.org/en/stable/
-- HTML Documentation (development): http://siphon.readthedocs.org/en/latest/
+- HTML Documentation: http://unidata.github.io/siphon/
 - Issue tracker: http://github.com/Unidata/siphon/issues
 
 Dependencies

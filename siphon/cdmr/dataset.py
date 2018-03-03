@@ -1,11 +1,13 @@
-# Copyright (c) 2013-2015 Unidata.
+# Copyright (c) 2013-2015 University Corporation for Atmospheric Research/Unidata.
 # Distributed under the terms of the MIT License.
 # SPDX-License-Identifier: MIT
+"""Provide a netCDF4-like interface on top of CDMRemote and NCStream."""
 
 from __future__ import print_function
+
+from collections import OrderedDict
 import enum
 import logging
-from collections import OrderedDict
 
 from .cdmremote import CDMRemote
 from .ncstream import unpack_attribute, unpack_variable
@@ -16,10 +18,14 @@ log.setLevel(logging.WARNING)
 
 
 class AttributeContainer(object):
+    """Unpack and provide access to attributes."""
+
     def __init__(self):
+        """Initialize the container."""
         self._attrs = []
 
     def ncattrs(self):
+        """Return a list of all available attributes."""
         return self._attrs
 
     def _unpack_attrs(self, attrs):
@@ -30,7 +36,10 @@ class AttributeContainer(object):
 
 
 class Group(AttributeContainer):
+    """Group together variables, attributes, and dimensions."""
+
     def __init__(self, parent=None):
+        """Initialize a Group."""
         super(Group, self).__init__()
         self.groups = OrderedDict()
         self.variables = OrderedDict()
@@ -43,7 +52,7 @@ class Group(AttributeContainer):
 
     @property
     def path(self):
-        'The full path to the Group, including any parent Groups.'
+        """Return the full path to the Group, including any parent Groups."""
         # If root, return '/'
         if self.dataset is self:
             return ''
@@ -51,6 +60,7 @@ class Group(AttributeContainer):
             return self.dataset.path + '/' + self.name
 
     def load_from_stream(self, group):
+        """Load a Group from an NCStream object."""
         self._unpack_attrs(group.atts)
         self.name = group.name
 
@@ -80,6 +90,7 @@ class Group(AttributeContainer):
                                                 [(typ.value, typ.code) for typ in en.map])
 
     def __str__(self):
+        """Return a string representation of the Group and its members."""
         print_groups = []
         if self.name:
             print_groups.append(self.name)
@@ -108,12 +119,17 @@ class Group(AttributeContainer):
         if self.ncattrs():
             print_groups.append('Attributes:')
             for att in self.ncattrs():
-                print_groups.append('\t%s: %s' % (att, getattr(self, att)))
+                print_groups.append('\t{}: {}'.format(att, getattr(self, att)))
         return '\n'.join(print_groups)
+
+    __repr__ = __str__
 
 
 class Dataset(Group):
+    """Abstract away access to the remote dataset."""
+
     def __init__(self, url):
+        """Initialize the dataset."""
         super(Dataset, self).__init__()
         self.cdmr = CDMRemote(url)
         self.url = url
@@ -127,11 +143,17 @@ class Dataset(Group):
         self.load_from_stream(self._header.root)
 
     def __str__(self):
+        """Return a string representation of the Dataset and all contained members."""
         return self.url + '\n' + super(Dataset, self).__str__()
+
+    __repr__ = __str__
 
 
 class Variable(AttributeContainer):
+    """Hold information about a data variable and provide access to the underlying data."""
+
     def __init__(self, group, name):
+        """Initialize the Variable."""
         super(Variable, self).__init__()
         self._group = group
         self.name = name
@@ -141,14 +163,16 @@ class Variable(AttributeContainer):
         self._enum = False
 
     def group(self):
+        """Return the parent Group."""
         return self._group
 
     @property
     def path(self):
-        'The full path to the Variable, including any parent Groups.'
+        """Return the full path to the Variable, including any parent Groups."""
         return self._group.path + '/' + self.name
 
     def __getitem__(self, ind):
+        """Access the Variable's underlying data."""
         if self._data is not None:
             # For scalars, don't slice
             return self._data if not self.shape else self._data[ind]
@@ -240,22 +264,22 @@ class Variable(AttributeContainer):
                 if i.start is None:
                     start = 0
                 else:
-                    start = self.adjust_index(dim, i.start)
+                    start = self._adjust_index(dim, i.start)
 
                 if i.stop is None:
                     stop = self.shape[dim]
                 else:
-                    stop = self.adjust_index(dim, i.stop)
+                    stop = self._adjust_index(dim, i.stop)
 
                 # Need to create new slice for adjusted values
                 ind[dim] = slice(start, stop, i.step)
             else:
                 # Adjust start and stop to handle negative indexing
-                ind[dim] = self.adjust_index(dim, i)
+                ind[dim] = self._adjust_index(dim, i)
 
         return ind, keep_dims
 
-    def adjust_index(self, dim, index):
+    def _adjust_index(self, dim, index):
         if index < 0:
             return self.shape[dim] + index
         elif index > self.shape[dim]:
@@ -263,6 +287,7 @@ class Variable(AttributeContainer):
         return index
 
     def load_from_stream(self, var):
+        """Populate the Variable from an NCStream object."""
         dims = []
         for d in var.shape:
             dim = Dimension(None, d.name)
@@ -286,11 +311,12 @@ class Variable(AttributeContainer):
             self._enum = True
 
     def __str__(self):
+        """Return a string representation of the Variable."""
         groups = [str(type(self))]
-        groups.append('%s %s(%s)' % (self.datatype, self.name,
-                                     ', '.join(self.dimensions)))
+        groups.append('{} {}({})'.format(self.datatype, self.name,
+                                         ', '.join(self.dimensions)))
         for att in self.ncattrs():
-            groups.append('\t%s: %s' % (att, getattr(self, att)))
+            groups.append('\t{}: {}'.format(att, getattr(self, att)))
         if self.ndim:
             if self.ndim > 1:
                 shape_str = '(' + ', '.join(str(s) for s in self.shape) + ')'
@@ -301,7 +327,10 @@ class Variable(AttributeContainer):
 
 
 class Dimension(object):
+    """Hold information about dimensions shared between variables."""
+
     def __init__(self, group, name, size=None):
+        """Initialize the Dimension."""
         self._group = group
         self.name = name
 
@@ -311,12 +340,15 @@ class Dimension(object):
         self.vlen = False
 
     def group(self):
+        """Return the parent Group."""
         return self._group
 
     def isunlimited(self):
+        """Return whether the dimesion is unlimited."""
         return self.unlimited
 
     def load_from_stream(self, dim):
+        """Load from an NCStream object."""
         self.unlimited = dim.isUnlimited
         self.private = dim.isPrivate
         self.vlen = dim.isVlen
@@ -324,10 +356,12 @@ class Dimension(object):
             self.size = dim.length
 
     def __len__(self):
+        """Return the length of the Dimension."""
         return self.size if self.size is not None else 0
 
     def __str__(self):
-        grps = ['%s ' % type(self)]
+        """Return a string representation of the Dimension information."""
+        grps = ['{} '.format(type(self))]
         if self.unlimited:
             grps.append('(unlimited): ')
 
@@ -342,3 +376,5 @@ class Dimension(object):
             grps.append(', size = {0}'.format(self.size))
 
         return ''.join(grps)
+
+    __repr__ = __str__
